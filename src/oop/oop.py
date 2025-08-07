@@ -2,7 +2,7 @@
 # Class Example
 
 class Vehicle:
-    def __init__(self, vehName, numDoors, numWheels):
+    def __init__(self, vehName: str, numDoors: int, numWheels: int):
         self.name = vehName
         self.doors = numDoors
         self.wheels = numWheels
@@ -18,7 +18,7 @@ class Vehicle:
 # This is actually how you would overload a function, by using defaults
 
 class Vehicle2:
-    def __init__(self, vehName, numDoors = 2, numWheels = 4, make = "Porschwagon"):
+    def __init__(self, vehName:str, numDoors:int = 2, numWheels:int = 4, make:str = "Porschwagon") -> None:
         self.name = vehName
         self.doors = numDoors
         self.wheels = numWheels
@@ -31,7 +31,7 @@ class Vehicle2:
 
 # Subclass examples
 class Van(Vehicle):
-    def __init__(self, vehName, numDoors, numWheels, numRearDoors, numSideDoors):
+    def __init__(self, vehName:str, numDoors:int, numWheels:int, numRearDoors:int, numSideDoors:int) -> None:
         super().__init__(vehName, numDoors, numWheels)
         self.rearDoors = numRearDoors
         self.sideDoors = numSideDoors
@@ -42,7 +42,7 @@ class Van(Vehicle):
 
 
 class Lorry(Vehicle):
-    def __init__(self, vehName, numDoors, numWheels, trailer, maxLoad):
+    def __init__(self, vehName:str, numDoors:int, numWheels:int, trailer:bool, maxLoad:int) -> None:
         super().__init__(vehName, numDoors, numWheels)
         self.trailer = trailer
         self.load = maxLoad
@@ -54,7 +54,7 @@ class Lorry(Vehicle):
 # -----------------------------------------------------------------------------------------------------------------
 
 
-def main():
+def main() -> None:
 
     # Class Example 1
     ollie_car = Vehicle("Pickle Rick", 2, 0)
@@ -75,7 +75,8 @@ def main():
 # -----------------------------------------------------------------------------------------------------------------
 
     # Object storage example
-    cars = [ollie_car, tom_car, ollie_car_2, tom_car_2]
+    from typing import Union
+    cars: list[Union[Vehicle, Vehicle2]] = [ollie_car, tom_car, ollie_car_2, tom_car_2]
     for i in range(0, len(cars)):
         print(cars[i].name) # You can reference individual attributes of objects this way - even from lists
         cars[i].printSpecs()
@@ -89,4 +90,6 @@ def main():
     van_example.printSpecs()
     lorry_example.printSpecs()
 
-main()
+# -----------------------------------------------------------------------------------------------------------------
+if __name__ == "__main__":
+    main()

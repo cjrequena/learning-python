@@ -1,4 +1,4 @@
-from learning_python.helloworld.helloworld import HelloWorld
+from src.helloworld.helloworld import HelloWorld
 
 
 def main():
