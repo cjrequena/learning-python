@@ -1,4 +1,4 @@
-# number_systems/__init__.py
+# number_system/__init__.py
 
 from .number_system import NumberSystem
 
