@@ -1,7 +1,7 @@
 # Learning Python
 
 ## [Repository Structure and Python]
-
+```text
 your_project/
 ├── src/                    # Source code
 │   └── your_package/       # Main package
@@ -26,3 +26,4 @@ your_project/
 ├── README.md               # Project overview
 ├── LICENSE                 # License file
 └── setup.cfg / setup.py    # Package info (if needed)
+```
