@@ -341,7 +341,7 @@ class BlockDecoder:
                     offset += item_len
 
                     # Analyze the witness item
-                    witness_item = self.analyze_witness_item(item_data, item_index, witness_count)
+                    witness_item = self.decode_witness_item(item_data, item_index, witness_count)
                     witness_items.append(witness_item)
                     total_witness_size += item_len
 
@@ -362,7 +362,7 @@ class BlockDecoder:
         return witnesses, offset
 
     #-------------------------------------------------------------------------------------------------
-    def analyze_witness_item(self, data: bytes, index: int, witness_count: int, /) -> WitnessItem:
+    def decode_witness_item(self, data: bytes, index: int, witness_count: int, /) -> WitnessItem:
         """
         Analyze a witness item to determine its type and purpose.
 
@@ -372,7 +372,7 @@ class BlockDecoder:
             witness_count: Total number of witness items
 
         Returns:
-            WitnessItem with type and description
+            WitnessItem
         """
         hex_data = data.hex()
         length = len(data)
@@ -486,7 +486,8 @@ class BlockDecoder:
         )
 
     #-------------------------------------------------------------------------------------------------
-    def determine_witness_type(self, witness_count: int, witness_items: list[WitnessItem], /) -> str:
+    @staticmethod
+    def determine_witness_type(witness_count: int, witness_items: list[WitnessItem], /) -> str:
         """
         Determine the overall witness type based on witness items.
 
@@ -526,7 +527,8 @@ class BlockDecoder:
                 return "UNKNOWN_WITNESS"
 
     #-------------------------------------------------------------------------------------------------
-    def get_sighash_description(self, sighash_type: int, /) -> str:
+    @staticmethod
+    def get_sighash_description(sighash_type: int, /) -> str:
         """
         Get description of sighash type.
 
@@ -600,9 +602,9 @@ class BlockDecoder:
             tx_inputs: list[TransactionInput]
 
             for _ in range(input_count):
-                xx = self.decode_transaction_inputs_from_raw_tx(tx_bytes.hex())
-                tx_inputs = xx[0]
-                offset = xx[1]
+                result_arr = self.decode_transaction_inputs_from_raw_tx(tx_bytes.hex())
+                tx_inputs = result_arr[0]
+                offset = result_arr[1]
 
 
             # Output count (varint)
@@ -612,9 +614,9 @@ class BlockDecoder:
             tx_outputs: list[TransactionOutput]
 
             for _ in range(output_count):
-                xx = self.decode_transaction_outputs_from_raw_tx(tx_bytes.hex())
-                tx_outputs = xx[0]
-                offset = xx[1]
+                result_arr = self.decode_transaction_outputs_from_raw_tx(tx_bytes.hex())
+                tx_outputs = result_arr[0]
+                offset = result_arr[1]
 
 
             # Witness count (varint)
@@ -624,9 +626,9 @@ class BlockDecoder:
             tx_witnesses: list[TransactionWitness]
 
             for _ in range(witness_count):
-                xx = self.decode_transaction_witnesses_from_raw_tx(tx_bytes.hex())
-                tx_witnesses = xx[0]
-                offset = xx[1]
+                result_arr = self.decode_transaction_witnesses_from_raw_tx(tx_bytes.hex())
+                tx_witnesses = result_arr[0]
+                offset = result_arr[1]
 
             # Lock time (4 bytes)
             lock_time = struct.unpack('<I', tx_bytes[offset:offset + 4])[0]
