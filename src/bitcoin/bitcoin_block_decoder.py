@@ -33,6 +33,7 @@ class TransactionOutput(TypedDict):
     script_pubkey: str
     script_pubkey_length: int
 
+
 class WitnessItem(TypedDict):
     """Type definition for a single witness item."""
     data: str
@@ -50,11 +51,19 @@ class TransactionWitness(TypedDict):
     total_witness_size: int
 
 
-# class BlockWitnessItem(TypedDict):
-#     """Type definition for decoded block Witness Item."""
-#
-#     witness_item_length: int
-#     witness_item: str
+class Transaction(TypedDict):
+    version: int
+    tx_type: str
+    has_witness: bool
+    tx_input_count: int
+    tx_inputs: list[TransactionInput]
+    tx_output_count: int
+    tx_outputs: list[TransactionOutput]
+    lock_time: int
+    size_bytes: int
+    total_output_value_satoshi: int
+    total_output_value_btc: float
+    tx_witnesses : list[TransactionWitness]
 
 
 class BlockDecoder:
@@ -159,7 +168,6 @@ class BlockDecoder:
 
         return inputs, offset
 
-
     # -------------------------------------------------------------------------------------------------
     def decode_transaction_outputs_from_raw_tx(self, tx: str, /) -> tuple[list[TransactionOutput], int]:
         """
@@ -252,7 +260,7 @@ class BlockDecoder:
 
         return outputs, offset
 
-    def decode_transaction_witnesses_from_raw_tx(self, tx: str, /) -> tuple [list[TransactionWitness], int]:
+    def decode_transaction_witnesses_from_raw_tx(self, tx: str, /) -> tuple[list[TransactionWitness], int]:
         """
         Decode and return the witness data from a raw SegWit transaction hex string.
 
@@ -557,7 +565,7 @@ class BlockDecoder:
             return base_desc
 
     #-------------------------------------------------------------------------------------------------
-    def decode_transaction(self, tx: str) -> tuple[any, int]:
+    def decode_transaction(self, tx: str) -> tuple[Transaction, int]:
         """
         Decode a single transaction (handles both Legacy and SegWit).
 
@@ -599,31 +607,29 @@ class BlockDecoder:
             input_count, offset = self.decode_varint(tx_bytes, offset)
 
             # Decode inputs
-            tx_inputs: list[TransactionInput]
+            tx_inputs: list[TransactionInput] = []
 
             for _ in range(input_count):
                 result_arr = self.decode_transaction_inputs_from_raw_tx(tx_bytes.hex())
                 tx_inputs = result_arr[0]
                 offset = result_arr[1]
 
-
             # Output count (varint)
             output_count, offset = self.decode_varint(tx_bytes, offset)
 
             # Decode outputs
-            tx_outputs: list[TransactionOutput]
+            tx_outputs: list[TransactionOutput] = []
 
             for _ in range(output_count):
                 result_arr = self.decode_transaction_outputs_from_raw_tx(tx_bytes.hex())
                 tx_outputs = result_arr[0]
                 offset = result_arr[1]
 
-
             # Witness count (varint)
             witness_count, offset = self.decode_varint(tx_bytes, offset)
 
             # Decode witness
-            tx_witnesses: list[TransactionWitness]
+            tx_witnesses: list[TransactionWitness] = []
 
             for _ in range(witness_count):
                 result_arr = self.decode_transaction_witnesses_from_raw_tx(tx_bytes.hex())
@@ -640,33 +646,20 @@ class BlockDecoder:
             # Calculate total output value
             total_output_value = sum(tx_output['value_satoshi'] for tx_output in tx_outputs)
 
-            print("version: ", version)
-            print("has_witness: ", has_witness)
-            print("input_count: ", input_count)
-            print("output_count", output_count)
-            print("tx_inputs", tx_inputs)
-            print("tx_outputs", tx_outputs)
-            print("tx_witnesses", tx_witnesses)
-            print("lock_time", lock_time)
-            print("tx_size", tx_size)
-            print("total_output_value: ", total_output_value)
-
-            transaction = {
+            transaction: Transaction = {
                 'version': version,
-                'transaction_type': 'SegWit' if has_witness else 'Legacy',
+                'tx_type': 'SegWit' if has_witness else 'Legacy',
                 'has_witness': has_witness,
-                'input_count': input_count,
-                'inputs': tx_inputs,
-                'output_count': output_count,
-                'outputs': tx_outputs,
+                'tx_input_count': input_count,
+                'tx_inputs': tx_inputs,
+                'tx_output_count': output_count,
+                'tx_outputs': tx_outputs,
                 'lock_time': lock_time,
                 'size_bytes': tx_size,
-                'total_output_value_satoshis': total_output_value,
-                'total_output_value_btc': total_output_value / 100000000.0
+                'total_output_value_satoshi': total_output_value,
+                'total_output_value_btc': total_output_value / 100000000.0,
+                'tx_witnesses': tx_witnesses
             }
-
-            if has_witness and tx_witnesses:
-                transaction['witness_data'] = tx_witnesses
 
         except ValueError as e:
             raise struct.error(f"Failed to unpack transaction data: {e}") from e
@@ -698,50 +691,11 @@ class BlockDecoder:
         else:
             raise ValueError("Invalid varint prefix byte")
 
+
 # -------------------------------------------------------------------------------------------------
 def main():
     # Example usage
     blockDecoder: BlockDecoder = BlockDecoder()
-
-    # print("================== HEADER DECODED ==================")
-    # header = "00201321b34f3ea8a91b54101b097544b78a2135783576ba3dd300000000000000000000f38bb3efa0fe5849c68bf122e4e6059eb72a5df399ff7a524cc7dc40a67ed07f75caa668b32c02174e71eeb6"
-    # header_decoded = blockDecoder.decode_block_header(header)
-    # print(header_decoded)
-
-    # print("================== INPUT DECODED ==================")
-    # tx_input: str = "0000000000000000000000000000000000000000000000000000000000000000ffffffff5d0395e60d0475caa6682f466f756e6472792055534120506f6f6c202364726f70676f6c642ffabe6d6d76154e5a870337f000d110efbdc40da9e19828614084f6f49d96abbe303f946d01000000000000004641a00b000020d802110000ffffffff"
-    # tx_input_decoded: str = blockDecoder.decode_transaction_input(tx_input)
-    # print(tx_input_decoded)
-
-    # print("================== OUTPUT DECODED ==================")
-    # tx_output: str = "9e3cc312000000002200207086320071974eef5e72eaa01dd9096e10c0383483855ea6b344259c244f73c2000000000000000026"
-    # tx_output_decoded: str = blockDecoder.decode_transaction_output(tx_output)
-    # print(tx_output_decoded)
-    # #
-    # print("================== INPUT DECODED ==================")
-    # tx_input: str = "a03a1266e4c7dd79d4e32a32a6361ba9cb330fdb75b1b44f7a2063fd4d3ddb990100000017160014bdf0625e221224dc3165b801f657b129a6779e0701000000"
-    # tx_input_decoded: str = blockDecoder.decode_transaction_input(tx_input)
-    # print(tx_input_decoded)
-    #
-    # print("================== WITNESS DECODED ==================")
-    # witness_data: str = "024730440220711a19de7461c592de856eddf20b36c15dd8cd44f16123dd42e844dbfceeef42022005eff1e9effb25c3235d3d0cfe5b6f5f4abee0534f734befcbc3dab63d0a81bd0121029f9406fd769e29631200d56143d88947fa9313be0b32ea728fa68f6b4fbd54e0"
-    # witness_data_decoded = blockDecoder.decode_witness(witness_data)
-    # print(witness_data_decoded)
-
-    # print("================== TRANSACTION DECODED ==================")
-    # tx: str = "0200000000010299a16d72bc9d715c814d9bda44c6bd1274f43916d7be13b5a6dc68adf2c6405f0000000000000000003f8d059c8c96eefd901d0b8c29cc74a5c8f2f49fd7546cb4fe130357903c36ad00000000000000000002c2e9030000000000225120a92dc3d6fb48ea45594d96f42a003d207234acf3733adaaccd3816cb74091d66cc07ef0000000000220020f8dac9cd19036102022df3e7d5c633530cdb94c3db759927e75264709c370d6f0140e683f71a72acaf54ccd5cc70f8d5bccc80be383bb09734d7aeee556babde1db3bde9c6104bbfff64f174bf2fc534945df1d08e514cee2b9c4e439df3a6d4a77902473044022065cb99f5f30c9fa07f8fd2ec9155b2d8e03f977cc67f8320daa3431745379a520220371ed2c20d8276403718db0bf5e69efc268f0d98c0d5b5c2ac5eb4709305a4790121038f97fb8778f6ea08b5848096a300fcee691974c2c731806432f790979ff144ce00000000"
-    # tx_decoded: list[TransactionInput] = blockDecoder.decode_transaction_inputs_from_raw_tx(tx)
-    # print(json.dumps(tx_decoded, indent=4))
-    #
-    # print("================== TRANSACTION DECODED ==================")
-    # tx: str = "0200000000010299a16d72bc9d715c814d9bda44c6bd1274f43916d7be13b5a6dc68adf2c6405f0000000000000000003f8d059c8c96eefd901d0b8c29cc74a5c8f2f49fd7546cb4fe130357903c36ad00000000000000000002c2e9030000000000225120a92dc3d6fb48ea45594d96f42a003d207234acf3733adaaccd3816cb74091d66cc07ef0000000000220020f8dac9cd19036102022df3e7d5c633530cdb94c3db759927e75264709c370d6f0140e683f71a72acaf54ccd5cc70f8d5bccc80be383bb09734d7aeee556babde1db3bde9c6104bbfff64f174bf2fc534945df1d08e514cee2b9c4e439df3a6d4a77902473044022065cb99f5f30c9fa07f8fd2ec9155b2d8e03f977cc67f8320daa3431745379a520220371ed2c20d8276403718db0bf5e69efc268f0d98c0d5b5c2ac5eb4709305a4790121038f97fb8778f6ea08b5848096a300fcee691974c2c731806432f790979ff144ce00000000"
-    # tx_decoded: list[TransactionOutput] = blockDecoder.decode_transaction_outputs_from_raw_tx(tx)
-    # print(json.dumps(tx_decoded, indent=4))
-
-    # print("================== TRANSACTION DECODED ==================")
-    # tx: str = "0200000000010299a16d72bc9d715c814d9bda44c6bd1274f43916d7be13b5a6dc68adf2c6405f0000000000000000003f8d059c8c96eefd901d0b8c29cc74a5c8f2f49fd7546cb4fe130357903c36ad00000000000000000002c2e9030000000000225120a92dc3d6fb48ea45594d96f42a003d207234acf3733adaaccd3816cb74091d66cc07ef0000000000220020f8dac9cd19036102022df3e7d5c633530cdb94c3db759927e75264709c370d6f0140e683f71a72acaf54ccd5cc70f8d5bccc80be383bb09734d7aeee556babde1db3bde9c6104bbfff64f174bf2fc534945df1d08e514cee2b9c4e439df3a6d4a77902473044022065cb99f5f30c9fa07f8fd2ec9155b2d8e03f977cc67f8320daa3431745379a520220371ed2c20d8276403718db0bf5e69efc268f0d98c0d5b5c2ac5eb4709305a4790121038f97fb8778f6ea08b5848096a300fcee691974c2c731806432f790979ff144ce00000000"
-    # tx_decoded: list[TransactionWitness] = blockDecoder.decode_transaction_witnesses_from_raw_tx(tx)
-    # print(json.dumps(tx_decoded, indent=4))
 
     print("================== TRANSACTION DECODED ==================")
     tx: str = "0200000000010299a16d72bc9d715c814d9bda44c6bd1274f43916d7be13b5a6dc68adf2c6405f0000000000000000003f8d059c8c96eefd901d0b8c29cc74a5c8f2f49fd7546cb4fe130357903c36ad00000000000000000002c2e9030000000000225120a92dc3d6fb48ea45594d96f42a003d207234acf3733adaaccd3816cb74091d66cc07ef0000000000220020f8dac9cd19036102022df3e7d5c633530cdb94c3db759927e75264709c370d6f0140e683f71a72acaf54ccd5cc70f8d5bccc80be383bb09734d7aeee556babde1db3bde9c6104bbfff64f174bf2fc534945df1d08e514cee2b9c4e439df3a6d4a77902473044022065cb99f5f30c9fa07f8fd2ec9155b2d8e03f977cc67f8320daa3431745379a520220371ed2c20d8276403718db0bf5e69efc268f0d98c0d5b5c2ac5eb4709305a4790121038f97fb8778f6ea08b5848096a300fcee691974c2c731806432f790979ff144ce00000000"
