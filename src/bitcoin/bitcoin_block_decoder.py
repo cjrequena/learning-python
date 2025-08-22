@@ -131,9 +131,11 @@ class BlockDecoder:
         # Skip version (4 bytes)
         offset += 4
 
-        # Check for SegWit marker + flag
-        if tx_bytes[offset] == 0x00 and tx_bytes[offset + 1] == 0x01:
-            offset += 2
+        # Check for SegWit marker and flag
+        has_witness = False
+        if offset + 1 < len(tx_bytes) and tx_bytes[offset] == 0x00 and tx_bytes[offset + 1] == 0x01:
+            has_witness = True
+            offset += 2  # Skip marker (0x00) and flag (0x01)
 
         # Input count
         input_count, offset = self.decode_varint(tx_bytes, offset)
@@ -201,13 +203,12 @@ class BlockDecoder:
             # Skip version (4 bytes)
             offset += 4
 
-            # Check for SegWit marker + flag
-            is_segwit = False
-            if (offset + 1 < len(tx_bytes) and
-                    tx_bytes[offset] == 0x00 and
-                    tx_bytes[offset + 1] == 0x01):
-                is_segwit = True
-                offset += 2
+            # Check for SegWit marker and flag
+            has_witness = False
+            if offset + 1 < len(tx_bytes) and tx_bytes[offset] == 0x00 and tx_bytes[offset + 1] == 0x01:
+                has_witness = True
+                offset += 2  # Skip marker (0x00) and flag (0x01)
+
 
             # Input count and skip inputs
             input_count, offset = self.decode_varint(tx_bytes, offset)
@@ -603,38 +604,33 @@ class BlockDecoder:
                 has_witness = True
                 offset += 2  # Skip marker (0x00) and flag (0x01)
 
-            # Input count (varint)
-            input_count, offset = self.decode_varint(tx_bytes, offset)
-
             # Decode inputs
             tx_inputs: list[TransactionInput] = []
-
+            # Input count (varint)
+            input_count, offset = self.decode_varint(tx_bytes, offset)
             for _ in range(input_count):
                 result_arr = self.decode_transaction_inputs_from_raw_tx(tx_bytes.hex())
                 tx_inputs = result_arr[0]
                 offset = result_arr[1]
 
-            # Output count (varint)
-            output_count, offset = self.decode_varint(tx_bytes, offset)
-
             # Decode outputs
             tx_outputs: list[TransactionOutput] = []
-
+            # Output count (varint)
+            output_count, offset = self.decode_varint(tx_bytes, offset)
             for _ in range(output_count):
                 result_arr = self.decode_transaction_outputs_from_raw_tx(tx_bytes.hex())
                 tx_outputs = result_arr[0]
                 offset = result_arr[1]
 
-            # Witness count (varint)
-            witness_count, offset = self.decode_varint(tx_bytes, offset)
-
-            # Decode witness
+            # Decode witnesses
             tx_witnesses: list[TransactionWitness] = []
-
-            for _ in range(witness_count):
-                result_arr = self.decode_transaction_witnesses_from_raw_tx(tx_bytes.hex())
-                tx_witnesses = result_arr[0]
-                offset = result_arr[1]
+            if has_witness:
+                # Witness count (varint)
+                witness_count, offset = self.decode_varint(tx_bytes, offset)
+                for _ in range(witness_count):
+                    result_arr = self.decode_transaction_witnesses_from_raw_tx(tx_bytes.hex())
+                    tx_witnesses = result_arr[0]
+                    offset = result_arr[1]
 
             # Lock time (4 bytes)
             lock_time = struct.unpack('<I', tx_bytes[offset:offset + 4])[0]
