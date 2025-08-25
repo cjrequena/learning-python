@@ -119,6 +119,103 @@ class BlockDecoder:
         # Return JSON string
         return json.dumps(block_header, indent=4)
 
+    #-------------------------------------------------------------------------------------------------
+    def decode_transaction(self, tx: str) -> tuple[Transaction, int]:
+        """
+        Decode a single transaction (handles both Legacy and SegWit).
+
+        Args:
+            tx (str): Block transaction data
+
+        Returns:
+            str: JSON string of the decoded transaction output
+        """
+
+        # Validate data
+        match tx:
+            case str() if tx.strip():
+                tx = tx.strip().lower()
+            case _:
+                raise ValueError("Witness data must be a non-empty string")
+
+        # Validate hex string format and convert to bytes
+        try:
+            tx_bytes: bytes = bytes.fromhex(tx)
+        except ValueError as e:
+            raise ValueError(f"Invalid hex string: {e}") from e
+
+        try:
+            offset: int = 0
+            start_offset: int = offset
+
+            # Version (4 bytes)
+            version: int = struct.unpack('<I', tx_bytes[offset:offset + 4])[0]
+            offset += 4
+
+            # Check for SegWit marker and flag
+            has_witness = False
+            if offset + 1 < len(tx_bytes) and tx_bytes[offset] == 0x00 and tx_bytes[offset + 1] == 0x01:
+                has_witness = True
+                offset += 2  # Skip marker (0x00) and flag (0x01)
+
+            # Decode inputs
+            tx_inputs: list[TransactionInput] = []
+            # Input count (varint)
+            input_count, offset = self.decode_varint(tx_bytes, offset)
+            for _ in range(input_count):
+                result_arr = self.decode_transaction_inputs_from_raw_tx(tx_bytes.hex())
+                tx_inputs = result_arr[0]
+                offset = result_arr[1]
+
+            # Decode outputs
+            tx_outputs: list[TransactionOutput] = []
+            # Output count (varint)
+            output_count, offset = self.decode_varint(tx_bytes, offset)
+            for _ in range(output_count):
+                result_arr = self.decode_transaction_outputs_from_raw_tx(tx_bytes.hex())
+                tx_outputs = result_arr[0]
+                offset = result_arr[1]
+
+            # Decode witnesses
+            tx_witnesses: list[TransactionWitness] = []
+            if has_witness:
+                # Witness count (varint)
+                witness_count, offset = self.decode_varint(tx_bytes, offset)
+                for _ in range(witness_count):
+                    result_arr = self.decode_transaction_witnesses_from_raw_tx(tx_bytes.hex())
+                    tx_witnesses = result_arr[0]
+                    offset = result_arr[1]
+
+            # Lock time (4 bytes)
+            lock_time = struct.unpack('<I', tx_bytes[offset:offset + 4])[0]
+            offset += 4
+
+            # Calculate transaction size
+            tx_size = offset - start_offset
+
+            # Calculate total output value
+            total_output_value = sum(tx_output['value_satoshi'] for tx_output in tx_outputs)
+
+            transaction: Transaction = {
+                'version': version,
+                'tx_type': 'SegWit' if has_witness else 'Legacy',
+                'has_witness': has_witness,
+                'tx_input_count': input_count,
+                'tx_inputs': tx_inputs,
+                'tx_output_count': output_count,
+                'tx_outputs': tx_outputs,
+                'lock_time': lock_time,
+                'size_bytes': tx_size,
+                'total_output_value_satoshi': total_output_value,
+                'total_output_value_btc': total_output_value / 100000000.0,
+                'tx_witnesses': tx_witnesses
+            }
+
+        except ValueError as e:
+            raise struct.error(f"Failed to unpack transaction data: {e}") from e
+
+        return transaction, offset
+
     # --------------------------------------------------------------------------------------------
     def decode_transaction_inputs_from_raw_tx(self, tx: str) -> tuple[list[TransactionInput], int]:
         """
@@ -564,103 +661,6 @@ class BlockDecoder:
             return f"{base_desc} | SIGHASH_ANYONECANPAY"
         else:
             return base_desc
-
-    #-------------------------------------------------------------------------------------------------
-    def decode_transaction(self, tx: str) -> tuple[Transaction, int]:
-        """
-        Decode a single transaction (handles both Legacy and SegWit).
-
-        Args:
-            tx (str): Block transaction data
-
-        Returns:
-            str: JSON string of the decoded transaction output
-        """
-
-        # Validate data
-        match tx:
-            case str() if tx.strip():
-                tx = tx.strip().lower()
-            case _:
-                raise ValueError("Witness data must be a non-empty string")
-
-        # Validate hex string format and convert to bytes
-        try:
-            tx_bytes: bytes = bytes.fromhex(tx)
-        except ValueError as e:
-            raise ValueError(f"Invalid hex string: {e}") from e
-
-        try:
-            offset: int = 0
-            start_offset: int = offset
-
-            # Version (4 bytes)
-            version: int = struct.unpack('<I', tx_bytes[offset:offset + 4])[0]
-            offset += 4
-
-            # Check for SegWit marker and flag
-            has_witness = False
-            if offset + 1 < len(tx_bytes) and tx_bytes[offset] == 0x00 and tx_bytes[offset + 1] == 0x01:
-                has_witness = True
-                offset += 2  # Skip marker (0x00) and flag (0x01)
-
-            # Decode inputs
-            tx_inputs: list[TransactionInput] = []
-            # Input count (varint)
-            input_count, offset = self.decode_varint(tx_bytes, offset)
-            for _ in range(input_count):
-                result_arr = self.decode_transaction_inputs_from_raw_tx(tx_bytes.hex())
-                tx_inputs = result_arr[0]
-                offset = result_arr[1]
-
-            # Decode outputs
-            tx_outputs: list[TransactionOutput] = []
-            # Output count (varint)
-            output_count, offset = self.decode_varint(tx_bytes, offset)
-            for _ in range(output_count):
-                result_arr = self.decode_transaction_outputs_from_raw_tx(tx_bytes.hex())
-                tx_outputs = result_arr[0]
-                offset = result_arr[1]
-
-            # Decode witnesses
-            tx_witnesses: list[TransactionWitness] = []
-            if has_witness:
-                # Witness count (varint)
-                witness_count, offset = self.decode_varint(tx_bytes, offset)
-                for _ in range(witness_count):
-                    result_arr = self.decode_transaction_witnesses_from_raw_tx(tx_bytes.hex())
-                    tx_witnesses = result_arr[0]
-                    offset = result_arr[1]
-
-            # Lock time (4 bytes)
-            lock_time = struct.unpack('<I', tx_bytes[offset:offset + 4])[0]
-            offset += 4
-
-            # Calculate transaction size
-            tx_size = offset - start_offset
-
-            # Calculate total output value
-            total_output_value = sum(tx_output['value_satoshi'] for tx_output in tx_outputs)
-
-            transaction: Transaction = {
-                'version': version,
-                'tx_type': 'SegWit' if has_witness else 'Legacy',
-                'has_witness': has_witness,
-                'tx_input_count': input_count,
-                'tx_inputs': tx_inputs,
-                'tx_output_count': output_count,
-                'tx_outputs': tx_outputs,
-                'lock_time': lock_time,
-                'size_bytes': tx_size,
-                'total_output_value_satoshi': total_output_value,
-                'total_output_value_btc': total_output_value / 100000000.0,
-                'tx_witnesses': tx_witnesses
-            }
-
-        except ValueError as e:
-            raise struct.error(f"Failed to unpack transaction data: {e}") from e
-
-        return transaction, offset
 
     # --------------------------------------------------------------------------------------------
     @staticmethod
