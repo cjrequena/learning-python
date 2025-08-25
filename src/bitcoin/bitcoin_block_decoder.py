@@ -63,7 +63,7 @@ class Transaction(TypedDict):
     size_bytes: int
     total_output_value_satoshi: int
     total_output_value_btc: float
-    tx_witnesses : list[TransactionWitness]
+    tx_witnesses: list[TransactionWitness]
 
 
 class BlockDecoder:
@@ -78,6 +78,9 @@ class BlockDecoder:
 
     # --------------------------------------------------------------------------------------------
     def decode_block_header(self, header: str) -> str:
+        """
+
+        """
         # Validate input
         match header:
             case str() if header.strip():
@@ -119,16 +122,9 @@ class BlockDecoder:
         # Return JSON string
         return json.dumps(block_header, indent=4)
 
-    #-------------------------------------------------------------------------------------------------
-    def decode_transaction(self, tx: str) -> tuple[Transaction, int]:
+    # -------------------------------------------------------------------------------------------------
+    def decode_transaction(self, tx: str, offset: int = 0) -> tuple[Transaction, int]:
         """
-        Decode a single transaction (handles both Legacy and SegWit).
-
-        Args:
-            tx (str): Block transaction data
-
-        Returns:
-            str: JSON string of the decoded transaction output
         """
 
         # Validate data
@@ -145,7 +141,6 @@ class BlockDecoder:
             raise ValueError(f"Invalid hex string: {e}") from e
 
         try:
-            offset: int = 0
             start_offset: int = offset
 
             # Version (4 bytes)
@@ -161,8 +156,8 @@ class BlockDecoder:
             # Decode inputs
             tx_inputs: list[TransactionInput] = []
             # Input count (varint)
-            input_count, offset = self.decode_varint(tx_bytes, offset)
-            for _ in range(input_count):
+            tx_input_count, offset = self.decode_varint(tx_bytes, offset)
+            for _ in range(tx_input_count):
                 result_arr = self.decode_transaction_inputs_from_raw_tx(tx_bytes.hex())
                 tx_inputs = result_arr[0]
                 offset = result_arr[1]
@@ -170,8 +165,8 @@ class BlockDecoder:
             # Decode outputs
             tx_outputs: list[TransactionOutput] = []
             # Output count (varint)
-            output_count, offset = self.decode_varint(tx_bytes, offset)
-            for _ in range(output_count):
+            tx_output_count, offset = self.decode_varint(tx_bytes, offset)
+            for _ in range(tx_output_count):
                 result_arr = self.decode_transaction_outputs_from_raw_tx(tx_bytes.hex())
                 tx_outputs = result_arr[0]
                 offset = result_arr[1]
@@ -180,8 +175,8 @@ class BlockDecoder:
             tx_witnesses: list[TransactionWitness] = []
             if has_witness:
                 # Witness count (varint)
-                witness_count, offset = self.decode_varint(tx_bytes, offset)
-                for _ in range(witness_count):
+                tx_witness_count, offset = self.decode_varint(tx_bytes, offset)
+                for _ in range(tx_witness_count):
                     result_arr = self.decode_transaction_witnesses_from_raw_tx(tx_bytes.hex())
                     tx_witnesses = result_arr[0]
                     offset = result_arr[1]
@@ -200,9 +195,9 @@ class BlockDecoder:
                 'version': version,
                 'tx_type': 'SegWit' if has_witness else 'Legacy',
                 'has_witness': has_witness,
-                'tx_input_count': input_count,
+                'tx_input_count': tx_input_count,
                 'tx_inputs': tx_inputs,
-                'tx_output_count': output_count,
+                'tx_output_count': tx_output_count,
                 'tx_outputs': tx_outputs,
                 'lock_time': lock_time,
                 'size_bytes': tx_size,
@@ -217,71 +212,10 @@ class BlockDecoder:
         return transaction, offset
 
     # --------------------------------------------------------------------------------------------
-    def decode_transaction_inputs_from_raw_tx(self, tx: str) -> tuple[list[TransactionInput], int]:
+    def decode_transaction_inputs_from_raw_tx(self, tx: str, offset: int = 0) -> tuple[list[TransactionInput], int]:
         """
-        Decode and return the list of transaction inputs from a raw transaction hex string.
-
         """
-        tx_bytes = bytes.fromhex(tx)
-        offset = 0
 
-        # Skip version (4 bytes)
-        offset += 4
-
-        # Check for SegWit marker and flag
-        has_witness = False
-        if offset + 1 < len(tx_bytes) and tx_bytes[offset] == 0x00 and tx_bytes[offset + 1] == 0x01:
-            has_witness = True
-            offset += 2  # Skip marker (0x00) and flag (0x01)
-
-        # Input count
-        input_count, offset = self.decode_varint(tx_bytes, offset)
-
-        inputs: list[TransactionInput] = []
-
-        for _ in range(input_count):
-            prev_tx_hash = tx_bytes[offset:offset + 32][::-1].hex()
-            offset += 32
-
-            prev_output_index = struct.unpack("<I", tx_bytes[offset:offset + 4])[0]
-            offset += 4
-
-            script_len, offset = self.decode_varint(tx_bytes, offset)
-
-            script_sig = tx_bytes[offset:offset + script_len].hex()
-            offset += script_len
-
-            sequence = struct.unpack("<I", tx_bytes[offset:offset + 4])[0]
-            offset += 4
-
-            is_coinbase = (prev_tx_hash == "00" * 32 and prev_output_index == 0xFFFFFFFF)
-
-            inputs.append({
-                "previous_tx_hash": prev_tx_hash,
-                "previous_output_index": prev_output_index,
-                "script_sig": script_sig,
-                "script_sig_length": hex(script_len),
-                "sequence": hex(sequence),
-                "is_coinbase": is_coinbase,
-            })
-
-        return inputs, offset
-
-    # -------------------------------------------------------------------------------------------------
-    def decode_transaction_outputs_from_raw_tx(self, tx: str, /) -> tuple[list[TransactionOutput], int]:
-        """
-        Decode and return the list of transaction outputs from a raw transaction hex string.
-
-        Args:
-            tx: Raw transaction as hexadecimal string
-
-        Returns:
-            List of decoded transaction outputs
-
-        Raises:
-            ValueError: If transaction format is invalid
-            struct.error: If data cannot be unpacked
-        """
         # Validate and convert input
         if not isinstance(tx, str) or not tx.strip():
             raise ValueError("Transaction must be a non-empty string")
@@ -294,7 +228,66 @@ class BlockDecoder:
         if len(tx_bytes) < 10:  # Minimum transaction size
             raise ValueError("Transaction too short to be valid")
 
-        offset = 0
+        try:
+            # Skip version (4 bytes)
+            offset += 4
+
+            # Check for SegWit marker and flag
+            has_witness = False
+            if offset + 1 < len(tx_bytes) and tx_bytes[offset] == 0x00 and tx_bytes[offset + 1] == 0x01:
+                has_witness = True
+                offset += 2  # Skip marker (0x00) and flag (0x01)
+
+            # Input count
+            tx_inputs_count, offset = self.decode_varint(tx_bytes, offset)
+
+            tx_inputs: list[TransactionInput] = []
+
+            for _ in range(tx_inputs_count):
+                prev_tx_hash = tx_bytes[offset:offset + 32][::-1].hex()
+                offset += 32
+
+                prev_output_index = struct.unpack("<I", tx_bytes[offset:offset + 4])[0]
+                offset += 4
+
+                script_len, offset = self.decode_varint(tx_bytes, offset)
+
+                script_sig = tx_bytes[offset:offset + script_len].hex()
+                offset += script_len
+
+                sequence = struct.unpack("<I", tx_bytes[offset:offset + 4])[0]
+                offset += 4
+
+                is_coinbase = (prev_tx_hash == "00" * 32 and prev_output_index == 0xFFFFFFFF)
+
+                tx_inputs.append({
+                    "previous_tx_hash": prev_tx_hash,
+                    "previous_output_index": prev_output_index,
+                    "script_sig": script_sig,
+                    "script_sig_length": hex(script_len),
+                    "sequence": hex(sequence),
+                    "is_coinbase": is_coinbase,
+                })
+        except (struct.error, IndexError) as e:
+            raise ValueError(f"Failed to decode transaction: {e}") from e
+        return tx_inputs, offset
+
+    # -------------------------------------------------------------------------------------------------
+    def decode_transaction_outputs_from_raw_tx(self, tx: str, offset:int = 0) -> tuple[list[TransactionOutput], int]:
+        """
+        """
+
+        # Validate and convert input
+        if not isinstance(tx, str) or not tx.strip():
+            raise ValueError("Transaction must be a non-empty string")
+
+        try:
+            tx_bytes = bytes.fromhex(tx.strip())
+        except ValueError as e:
+            raise ValueError(f"Invalid hex string: {e}") from e
+
+        if len(tx_bytes) < 10:  # Minimum transaction size
+            raise ValueError("Transaction too short to be valid")
 
         try:
             # Skip version (4 bytes)
@@ -306,12 +299,11 @@ class BlockDecoder:
                 has_witness = True
                 offset += 2  # Skip marker (0x00) and flag (0x01)
 
-
             # Input count and skip inputs
-            input_count, offset = self.decode_varint(tx_bytes, offset)
+            tx_inputs_count, offset = self.decode_varint(tx_bytes, offset)
 
             # Skip all inputs
-            for _ in range(input_count):
+            for _ in range(tx_inputs_count):
                 # Skip previous tx hash (32 bytes) + output index (4 bytes)
                 offset += 36
 
@@ -323,11 +315,11 @@ class BlockDecoder:
                 offset += 4
 
             # Output count
-            output_count, offset = self.decode_varint(tx_bytes, offset)
+            tx_outputs_count, offset = self.decode_varint(tx_bytes, offset)
 
-            outputs: list[TransactionOutput] = []
+            tx_outputs: list[TransactionOutput] = []
 
-            for i in range(output_count):
+            for i in range(tx_outputs_count):
                 if offset + 8 > len(tx_bytes):
                     raise ValueError(f"Insufficient data for output {i} value")
 
@@ -351,12 +343,12 @@ class BlockDecoder:
                     "script_pubkey_length": script_pubkey_length
                 }
 
-                outputs.append(block_tx_output)
+                tx_outputs.append(block_tx_output)
 
         except (struct.error, IndexError) as e:
             raise ValueError(f"Failed to decode transaction: {e}") from e
 
-        return outputs, offset
+        return tx_outputs, offset
 
     def decode_transaction_witnesses_from_raw_tx(self, tx: str, /) -> tuple[list[TransactionWitness], int]:
         """
@@ -467,7 +459,7 @@ class BlockDecoder:
 
         return witnesses, offset
 
-    #-------------------------------------------------------------------------------------------------
+    # -------------------------------------------------------------------------------------------------
     def decode_witness_item(self, data: bytes, index: int, witness_count: int, /) -> WitnessItem:
         """
         Analyze a witness item to determine its type and purpose.
@@ -591,7 +583,7 @@ class BlockDecoder:
             description=f"Unknown witness data ({length} bytes)"
         )
 
-    #-------------------------------------------------------------------------------------------------
+    # -------------------------------------------------------------------------------------------------
     @staticmethod
     def determine_witness_type(witness_count: int, witness_items: list[WitnessItem], /) -> str:
         """
@@ -632,7 +624,7 @@ class BlockDecoder:
             case _:
                 return "UNKNOWN_WITNESS"
 
-    #-------------------------------------------------------------------------------------------------
+    # -------------------------------------------------------------------------------------------------
     @staticmethod
     def get_sighash_description(sighash_type: int, /) -> str:
         """
