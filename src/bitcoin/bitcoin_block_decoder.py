@@ -819,12 +819,9 @@ def main():
     print(json.dumps(tx_decoded, indent=4))
 
 
-
-
-
-    # print("================== BLOCK BODY DECODED ==================")
-    # body: str = ""
-    # body_decoded = blockDecoder.decode_block_body(body)
-    # print(json.dumps(body_decoded, indent=4))
+    print("================== BLOCK BODY DECODED ==================")
+    body: str = "0101000000010000000000000000000000000000000000000000000000000000000000000000ffffffff0704ffff001d014dffffffff0100f2052a01000000434104e70a02f5af48a1989bf630d92523c9d14c45c75f7d1b998e962bff6ff9995fc5bdb44f1793b37495d80324acba7c8f537caaf8432b8d47987313060cc82d8a93ac00000000"
+    body_decoded = blockDecoder.decode_block_body(body)
+    print(json.dumps(body_decoded, indent=4))
 if __name__ == "__main__":
     main()
