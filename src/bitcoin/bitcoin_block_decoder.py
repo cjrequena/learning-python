@@ -122,14 +122,23 @@ class BlockDecoder:
         # Return JSON string
         return json.dumps(block_header, indent=4)
 
-    def decode_block_body(self, body:str, offset: int = 0):
+    def decode_block_body(self, body: str, offset: int = 0):
         """
         """
         try:
-            body_bytes = bytes.fromhex(body)
+            # Validate data
+            match body:
+                case str() if body.strip():
+                    body = body.strip().lower()
+                case _:
+                    raise ValueError("Block nody data must be a non-empty string")
 
-            # Transaction count (varint)
-            tx_count, offset = self.decode_varint(body_bytes, offset)
+            # Validate hex string format and convert to bytes
+            try:
+                body_bytes: bytes = bytes.fromhex(body)
+            except ValueError as ex:
+                raise ValueError(f"Invalid hex string: {ex}") from ex
+
 
             transactions = []
             total_inputs = 0
@@ -138,7 +147,10 @@ class BlockDecoder:
             has_segwit_txs = False
             coinbase_count = 0
 
-            raw_txs: list[str] = self.extract_raw_transactions(body_bytes.hex())
+            # Transaction count (varint)
+            tx_count, offset = self.decode_varint(body_bytes, offset)
+
+            raw_txs: list[str] = self.extract_raw_txs(body_bytes.hex())
 
             for raw_tx in raw_txs:
                 try:
@@ -175,11 +187,8 @@ class BlockDecoder:
                 'transactions': transactions
             }
 
-        except Exception as e:
-            return {
-                'error': f"Failed to decode block body: {str(e)}",
-                'raw_hex_length': len(body_bytes)
-            }
+        except ValueError as ex:
+            raise ValueError(f"Error decoding block body {ex}") from ex
 
     # -------------------------------------------------------------------------------------------------
     def decode_raw_tx(self, tx: str, offset: int = 0) -> tuple[Transaction, int]:
@@ -191,7 +200,7 @@ class BlockDecoder:
             case str() if tx.strip():
                 tx = tx.strip().lower()
             case _:
-                raise ValueError("Witness data must be a non-empty string")
+                raise ValueError("Transaction data must be a non-empty string")
 
         # Validate hex string format and convert to bytes
         try:
@@ -269,8 +278,9 @@ class BlockDecoder:
             raise struct.error(f"Failed to unpack transaction data: {e}") from e
 
         return transaction, offset
+
     # --------------------------------------------------------------------------------------------
-    def extract_raw_transactions(self, body: str, offset: int = 0) -> list[str]:
+    def extract_raw_txs(self, body: str, offset: int = 0) -> list[str]:
         """
         """
 
@@ -287,57 +297,59 @@ class BlockDecoder:
         except ValueError as ex:
             raise ValueError(f"Invalid hex string: {ex}") from ex
 
-        txs = []
+        txs: list[str] = []
 
-        # read transaction count
-        tx_count, offset = self.decode_varint(body_bytes, offset)
+        try:
+            # read transaction count
+            tx_count, offset = self.decode_varint(body_bytes, offset)
 
-        for _ in range(tx_count):
-            start_offset = offset
+            for _ in range(tx_count):
+                start_offset = offset
 
-            # --- parse just enough to find tx end ---
-            version = body_bytes[offset:offset + 4]
-            offset += 4
+                # --- parse just enough to find tx end ---
+                version = body_bytes[offset:offset + 4]
+                offset += 4
 
-            has_witness = False
-            if body_bytes[offset] == 0x00 and body_bytes[offset + 1] == 0x01:
-                has_witness = True
-                offset += 2
+                has_witness = False
+                if body_bytes[offset] == 0x00 and body_bytes[offset + 1] == 0x01:
+                    has_witness = True
+                    offset += 2
 
-            # inputs
-            tx_inputs_count, offset = self.decode_varint(body_bytes, offset)
+                # inputs
+                tx_inputs_count, offset = self.decode_varint(body_bytes, offset)
 
-            for _ in range(tx_inputs_count):
-                offset += 32  # prev txid
-                offset += 4  # index
-                script_len, offset = self.decode_varint(body_bytes, offset)
-                offset += script_len
-                offset += 4  # sequence
-
-            # outputs
-            tx_outputs_count, offset = self.decode_varint(body_bytes, offset)
-            for _ in range(tx_outputs_count):
-                offset += 8  # value
-                script_len, offset = self.decode_varint(body_bytes, offset)
-                offset += script_len
-
-            # witnesses
-            if has_witness:
                 for _ in range(tx_inputs_count):
-                    n_stack, offset = self.decode_varint(body_bytes, offset)
-                    for _ in range(n_stack):
-                        item_len, offset = self.decode_varint(body_bytes, offset)
-                        offset += item_len
+                    offset += 32  # prev txid
+                    offset += 4  # index
+                    script_len, offset = self.decode_varint(body_bytes, offset)
+                    offset += script_len
+                    offset += 4  # sequence
 
-            # locktime
-            offset += 4
+                # outputs
+                tx_outputs_count, offset = self.decode_varint(body_bytes, offset)
+                for _ in range(tx_outputs_count):
+                    offset += 8  # value
+                    script_len, offset = self.decode_varint(body_bytes, offset)
+                    offset += script_len
 
-            # slice raw tx
-            tx_end = offset
-            txs.append(body_bytes[start_offset:tx_end].hex())
+                # witnesses
+                if has_witness:
+                    for _ in range(tx_inputs_count):
+                        n_stack, offset = self.decode_varint(body_bytes, offset)
+                        for _ in range(n_stack):
+                            item_len, offset = self.decode_varint(body_bytes, offset)
+                            offset += item_len
+
+                # locktime
+                offset += 4
+
+                # slice raw tx
+                tx_end = offset
+                txs.append(body_bytes[start_offset:tx_end].hex())
+        except ValueError as ex:
+            raise ValueError(f"Error extracting raw txs: {ex}") from ex
 
         return txs
-
 
     # --------------------------------------------------------------------------------------------
     def decode_transaction_inputs_from_raw_tx(self, tx: str, offset: int = 0) -> tuple[list[TransactionInput], int]:
@@ -401,7 +413,7 @@ class BlockDecoder:
         return tx_inputs, offset
 
     # -------------------------------------------------------------------------------------------------
-    def decode_transaction_outputs_from_raw_tx(self, tx: str, offset:int = 0) -> tuple[list[TransactionOutput], int]:
+    def decode_transaction_outputs_from_raw_tx(self, tx: str, offset: int = 0) -> tuple[list[TransactionOutput], int]:
         """
         """
 
@@ -814,14 +826,15 @@ def main():
     blockDecoder: BlockDecoder = BlockDecoder()
 
     print("================== TRANSACTION DECODED ==================")
-    tx: str = "0200000000010299a16d72bc9d715c814d9bda44c6bd1274f43916d7be13b5a6dc68adf2c6405f0000000000000000003f8d059c8c96eefd901d0b8c29cc74a5c8f2f49fd7546cb4fe130357903c36ad00000000000000000002c2e9030000000000225120a92dc3d6fb48ea45594d96f42a003d207234acf3733adaaccd3816cb74091d66cc07ef0000000000220020f8dac9cd19036102022df3e7d5c633530cdb94c3db759927e75264709c370d6f0140e683f71a72acaf54ccd5cc70f8d5bccc80be383bb09734d7aeee556babde1db3bde9c6104bbfff64f174bf2fc534945df1d08e514cee2b9c4e439df3a6d4a77902473044022065cb99f5f30c9fa07f8fd2ec9155b2d8e03f977cc67f8320daa3431745379a520220371ed2c20d8276403718db0bf5e69efc268f0d98c0d5b5c2ac5eb4709305a4790121038f97fb8778f6ea08b5848096a300fcee691974c2c731806432f790979ff144ce00000000"
+    tx: str = "01000000010000000000000000000000000000000000000000000000000000000000000000ffffffff0704ffff001d014dffffffff0100f2052a01000000434104e70a02f5af48a1989bf630d92523c9d14c45c75f7d1b998e962bff6ff9995fc5bdb44f1793b37495d80324acba7c8f537caaf8432b8d47987313060cc82d8a93ac00000000"
     tx_decoded = blockDecoder.decode_raw_tx(tx)
     print(json.dumps(tx_decoded, indent=4))
-
 
     print("================== BLOCK BODY DECODED ==================")
     body: str = "0101000000010000000000000000000000000000000000000000000000000000000000000000ffffffff0704ffff001d014dffffffff0100f2052a01000000434104e70a02f5af48a1989bf630d92523c9d14c45c75f7d1b998e962bff6ff9995fc5bdb44f1793b37495d80324acba7c8f537caaf8432b8d47987313060cc82d8a93ac00000000"
     body_decoded = blockDecoder.decode_block_body(body)
     print(json.dumps(body_decoded, indent=4))
+
+
 if __name__ == "__main__":
     main()
