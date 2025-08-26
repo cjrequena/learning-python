@@ -1,5 +1,6 @@
 import json
 import struct
+import requests
 from typing import TypedDict
 
 
@@ -88,13 +89,13 @@ class BlockDecoder:
             header = block[:160]
             body = block[160:]
 
-            header = self.decode_block_header(header)
-            body = self.decode_block_body(body)
+            decoded_header = self.decode_block_header(header)
+            decoded_body = self.decode_block_body(body)
 
             return {
                 'block_hash': self.calculate_block_hash(header),
-                'header': header,
-                'body': body,
+                'header': decoded_header,
+                'body': decoded_body,
                 'total_block_size_bytes': len(block) // 2,
                 'header_size_bytes': 80,
                 'body_size_bytes': len(body) // 2
@@ -107,7 +108,7 @@ class BlockDecoder:
             }
 
     # --------------------------------------------------------------------------------------------
-    def decode_block_header(self, header: str) -> str:
+    def decode_block_header(self, header: str) -> BlockHeader:
         """
 
         """
@@ -148,9 +149,7 @@ class BlockDecoder:
             "bits": bits,
             "nonce": nonce,
         }
-
-        # Return JSON string
-        return json.dumps(block_header, indent=4)
+        return block_header
 
     # --------------------------------------------------------------------------------------------
     def calculate_block_hash(self, header):
@@ -853,19 +852,22 @@ class BlockDecoder:
 
 # -------------------------------------------------------------------------------------------------
 def main():
-    # Example usage
-    blockDecoder: BlockDecoder = BlockDecoder()
 
-    print("================== TRANSACTION DECODED ==================")
-    tx: str = "01000000010000000000000000000000000000000000000000000000000000000000000000ffffffff0704ffff001d014dffffffff0100f2052a01000000434104e70a02f5af48a1989bf630d92523c9d14c45c75f7d1b998e962bff6ff9995fc5bdb44f1793b37495d80324acba7c8f537caaf8432b8d47987313060cc82d8a93ac00000000"
-    tx_decoded = blockDecoder.decode_raw_tx(tx)
-    print(json.dumps(tx_decoded, indent=4))
+    block_decoder: BlockDecoder = BlockDecoder()
 
-    print("================== BLOCK BODY DECODED ==================")
-    body: str = "0101000000010000000000000000000000000000000000000000000000000000000000000000ffffffff0704ffff001d014dffffffff0100f2052a01000000434104e70a02f5af48a1989bf630d92523c9d14c45c75f7d1b998e962bff6ff9995fc5bdb44f1793b37495d80324acba7c8f537caaf8432b8d47987313060cc82d8a93ac00000000"
-    body_decoded = blockDecoder.decode_block_body(body)
-    print(json.dumps(body_decoded, indent=4))
+    # set block height here
+    block_height = 0  # change this to any block height you want
 
+    url = f"https://blockchain.info/rawblock/{block_height}?format=hex"
+    resp = requests.get(url)
+
+    if resp.status_code == 200:
+        block = resp.text.strip()  # raw block hex
+        block_bytes = bytes.fromhex(block)
+        decoded_block = block_decoder.decode_full_block(block_bytes.hex())
+        print(json.dumps(decoded_block, indent=2))
+    else:
+        print("Error:", resp.status_code, resp.text)
 
 if __name__ == "__main__":
     main()
