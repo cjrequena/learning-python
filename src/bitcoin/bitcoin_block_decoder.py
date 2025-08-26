@@ -102,13 +102,14 @@ class BlockDecoder:
             }
 
         except Exception as e:
-            return {
+            raise ValueError({
                 'error': f"Failed to decode full block: {str(e)}",
                 'raw_hex_length': len(block)
-            }
+            })
 
     # --------------------------------------------------------------------------------------------
-    def decode_block_header(self, header: str) -> BlockHeader:
+    @staticmethod
+    def decode_block_header(header: str) -> BlockHeader:
         """
 
         """
@@ -152,7 +153,8 @@ class BlockDecoder:
         return block_header
 
     # --------------------------------------------------------------------------------------------
-    def calculate_block_hash(self, header):
+    @staticmethod
+    def calculate_block_hash(header) -> str:
         """
         Calculate the block hash from the header.
 
@@ -168,11 +170,11 @@ class BlockDecoder:
             hash1 = hashlib.sha256(header_bytes).digest()
             hash2 = hashlib.sha256(hash1).digest()
             return hash2[::-1].hex()  # Reverse byte order
-        except Exception as e:
-            return f"Error calculating hash: {str(e)}"
+        except Exception as ex:
+            raise ValueError(f"Error calculating hash: {str(ex)}")
 
     # --------------------------------------------------------------------------------------------
-    def decode_block_body(self, body: str, offset: int = 0):
+    def decode_block_body(self, body: str):
         """
         """
 
@@ -181,7 +183,7 @@ class BlockDecoder:
             case str() if body.strip():
                 body = body.strip().lower()
             case _:
-                raise ValueError("Block nody data must be a non-empty string")
+                raise ValueError("Block body data must be a non-empty string")
 
         # Validate hex string format and convert to bytes
         try:
@@ -190,6 +192,7 @@ class BlockDecoder:
             raise ValueError(f"Invalid hex string: {ex}") from ex
 
         try:
+            offset: int = 0
             transactions = []
             total_inputs = 0
             total_outputs = 0
@@ -200,13 +203,13 @@ class BlockDecoder:
             # Transaction count (varint)
             tx_count, offset = self.decode_varint(body_bytes, offset)
 
+            # Extract and retrieve the list of raw hex txs.
             raw_txs: list[str] = self.extract_raw_txs(body_bytes.hex())
 
             for raw_tx in raw_txs:
                 try:
-                    tx, offset = self.decode_raw_tx(raw_tx)
+                    tx: Transaction = self.decode_raw_tx(raw_tx)
                     transactions.append(tx)
-
                     total_inputs += tx['tx_input_count']
                     total_outputs += tx['tx_output_count']
                     total_value_satoshi += tx['total_output_value_satoshi']
@@ -220,7 +223,7 @@ class BlockDecoder:
                         coinbase_count += 1
 
                 except Exception as ex:
-                    raise struct.error(f"Failed to decode block body data: {ex}") from ex
+                    raise ValueError(f"Error decoding raw_tx {raw_tx}: {ex}") from ex
 
             return {
                 'transaction_count': tx_count,
@@ -241,7 +244,7 @@ class BlockDecoder:
             raise ValueError(f"Error decoding block body {ex}") from ex
 
     # -------------------------------------------------------------------------------------------------
-    def decode_raw_tx(self, tx: str, offset: int = 0) -> tuple[Transaction, int]:
+    def decode_raw_tx(self, tx: str) -> Transaction:
         """
         """
 
@@ -259,7 +262,7 @@ class BlockDecoder:
             raise ValueError(f"Invalid hex string: {e}") from e
 
         try:
-            start_offset: int = offset
+            offset: int = 0
 
             # Version (4 bytes)
             version: int = struct.unpack('<I', tx_bytes[offset:offset + 4])[0]
@@ -276,18 +279,14 @@ class BlockDecoder:
             # Input count (varint)
             tx_input_count, offset = self.decode_varint(tx_bytes, offset)
             for _ in range(tx_input_count):
-                result_arr = self.decode_transaction_inputs_from_raw_tx(tx_bytes.hex())
-                tx_inputs = result_arr[0]
-                offset = result_arr[1]
+                tx_inputs, offset = self.decode_transaction_inputs_from_raw_tx(tx_bytes.hex())
 
             # Decode outputs
             tx_outputs: list[TransactionOutput] = []
             # Output count (varint)
             tx_output_count, offset = self.decode_varint(tx_bytes, offset)
             for _ in range(tx_output_count):
-                result_arr = self.decode_transaction_outputs_from_raw_tx(tx_bytes.hex())
-                tx_outputs = result_arr[0]
-                offset = result_arr[1]
+                tx_outputs, offset = self.decode_transaction_outputs_from_raw_tx(tx_bytes.hex())
 
             # Decode witnesses
             tx_witnesses: list[TransactionWitness] = []
@@ -295,21 +294,16 @@ class BlockDecoder:
                 # Witness count (varint)
                 tx_witness_count, offset = self.decode_varint(tx_bytes, offset)
                 for _ in range(tx_witness_count):
-                    result_arr = self.decode_transaction_witnesses_from_raw_tx(tx_bytes.hex())
-                    tx_witnesses = result_arr[0]
-                    offset = result_arr[1]
+                    tx_witnesses, offset = self.decode_transaction_witnesses_from_raw_tx(tx_bytes.hex())
 
             # Lock time (4 bytes)
             lock_time = struct.unpack('<I', tx_bytes[offset:offset + 4])[0]
             offset += 4
 
-            # Calculate transaction size
-            tx_size = offset - start_offset
-
             # Calculate total output value
             total_output_value = sum(tx_output['value_satoshi'] for tx_output in tx_outputs)
 
-            transaction: Transaction = {
+            tx: Transaction = {
                 'version': version,
                 'tx_type': 'SegWit' if has_witness else 'Legacy',
                 'has_witness': has_witness,
@@ -318,7 +312,7 @@ class BlockDecoder:
                 'tx_output_count': tx_output_count,
                 'tx_outputs': tx_outputs,
                 'lock_time': lock_time,
-                'size_bytes': tx_size,
+                'size_bytes': offset,
                 'total_output_value_satoshi': total_output_value,
                 'total_output_value_btc': total_output_value / 100000000.0,
                 'tx_witnesses': tx_witnesses
@@ -327,7 +321,7 @@ class BlockDecoder:
         except ValueError as e:
             raise struct.error(f"Failed to unpack transaction data: {e}") from e
 
-        return transaction, offset
+        return tx
 
     # --------------------------------------------------------------------------------------------
     def extract_raw_txs(self, body: str, offset: int = 0) -> list[str]:
@@ -852,7 +846,6 @@ class BlockDecoder:
 
 # -------------------------------------------------------------------------------------------------
 def main():
-
     block_decoder: BlockDecoder = BlockDecoder()
 
     # set block height here
@@ -868,6 +861,7 @@ def main():
         print(json.dumps(decoded_block, indent=2))
     else:
         print("Error:", resp.status_code, resp.text)
+
 
 if __name__ == "__main__":
     main()
