@@ -77,6 +77,36 @@ class BlockDecoder:
         pass
 
     # --------------------------------------------------------------------------------------------
+    def decode_full_block(self, block):
+        """
+        """
+        try:
+            # First 80 bytes (160 hex characters) are the header
+            if len(block) < 160:
+                raise ValueError("Block data too short to contain a valid header")
+
+            header = block[:160]
+            body = block[160:]
+
+            header = self.decode_block_header(header)
+            body = self.decode_block_body(body)
+
+            return {
+                'block_hash': self.calculate_block_hash(header),
+                'header': header,
+                'body': body,
+                'total_block_size_bytes': len(block) // 2,
+                'header_size_bytes': 80,
+                'body_size_bytes': len(body) // 2
+            }
+
+        except Exception as e:
+            return {
+                'error': f"Failed to decode full block: {str(e)}",
+                'raw_hex_length': len(block)
+            }
+
+    # --------------------------------------------------------------------------------------------
     def decode_block_header(self, header: str) -> str:
         """
 
@@ -122,24 +152,45 @@ class BlockDecoder:
         # Return JSON string
         return json.dumps(block_header, indent=4)
 
+    # --------------------------------------------------------------------------------------------
+    def calculate_block_hash(self, header):
+        """
+        Calculate the block hash from the header.
+
+        Args:
+            header (str): Block header as hex string
+
+        Returns:
+            str: Block hash (double SHA-256, reversed)
+        """
+        try:
+            import hashlib
+            header_bytes = bytes.fromhex(header)
+            hash1 = hashlib.sha256(header_bytes).digest()
+            hash2 = hashlib.sha256(hash1).digest()
+            return hash2[::-1].hex()  # Reverse byte order
+        except Exception as e:
+            return f"Error calculating hash: {str(e)}"
+
+    # --------------------------------------------------------------------------------------------
     def decode_block_body(self, body: str, offset: int = 0):
         """
         """
+
+        # Validate data
+        match body:
+            case str() if body.strip():
+                body = body.strip().lower()
+            case _:
+                raise ValueError("Block nody data must be a non-empty string")
+
+        # Validate hex string format and convert to bytes
         try:
-            # Validate data
-            match body:
-                case str() if body.strip():
-                    body = body.strip().lower()
-                case _:
-                    raise ValueError("Block nody data must be a non-empty string")
+            body_bytes: bytes = bytes.fromhex(body)
+        except ValueError as ex:
+            raise ValueError(f"Invalid hex string: {ex}") from ex
 
-            # Validate hex string format and convert to bytes
-            try:
-                body_bytes: bytes = bytes.fromhex(body)
-            except ValueError as ex:
-                raise ValueError(f"Invalid hex string: {ex}") from ex
-
-
+        try:
             transactions = []
             total_inputs = 0
             total_outputs = 0
@@ -492,17 +543,6 @@ class BlockDecoder:
 
     def decode_transaction_witnesses_from_raw_tx(self, tx: str, /) -> tuple[list[TransactionWitness], int]:
         """
-        Decode and return the witness data from a raw SegWit transaction hex string.
-
-        Args:
-            tx: Raw transaction as hexadecimal string
-
-        Returns:
-            List of TransactionWitness for each input
-
-        Raises:
-            ValueError: If transaction format is invalid or not SegWit
-            struct.error: If data cannot be unpacked
         """
         # Validate and convert input
         if not isinstance(tx, str) or not tx.strip():
@@ -602,15 +642,6 @@ class BlockDecoder:
     # -------------------------------------------------------------------------------------------------
     def decode_witness_item(self, data: bytes, index: int, witness_count: int, /) -> WitnessItem:
         """
-        Analyze a witness item to determine its type and purpose.
-
-        Args:
-            data: Raw witness item data
-            index: Index of this item in the witness stack
-            witness_count: Total number of witness items
-
-        Returns:
-            WitnessItem
         """
         hex_data = data.hex()
         length = len(data)
