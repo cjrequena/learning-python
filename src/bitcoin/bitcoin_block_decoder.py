@@ -122,9 +122,7 @@ class BlockDecoder:
 
         # Validate hex string length (80 bytes = 160 hex characters)
         if len(header) != 160:
-            raise ValueError(
-                f"Header must be exactly 160 hex characters, got {len(header)}"
-            )
+            raise ValueError(f"Header must be exactly 160 hex characters, got {len(header)}")
 
         # Validate hex string format and convert to bytes
         try:
@@ -223,7 +221,7 @@ class BlockDecoder:
                         coinbase_count += 1
 
                 except Exception as ex:
-                    raise ValueError(f"Error decoding raw_tx {raw_tx}: {ex}") from ex
+                    raise Exception(f"Error decoding raw_tx {raw_tx}: {ex}") from ex
 
             return {
                 'transaction_count': tx_count,
@@ -240,8 +238,8 @@ class BlockDecoder:
                 'transactions': transactions
             }
 
-        except ValueError as ex:
-            raise ValueError(f"Error decoding block body {ex}") from ex
+        except Exception as ex:
+            raise Exception(f"Error decoding block body {ex}") from ex
 
     # -------------------------------------------------------------------------------------------------
     def decode_raw_tx(self, tx: str) -> Transaction:
@@ -303,7 +301,7 @@ class BlockDecoder:
             # Calculate total output value
             total_output_value = sum(tx_output['value_satoshi'] for tx_output in tx_outputs)
 
-            tx: Transaction = {
+            decoded_tx: Transaction = {
                 'version': version,
                 'tx_type': 'SegWit' if has_witness else 'Legacy',
                 'has_witness': has_witness,
@@ -321,7 +319,7 @@ class BlockDecoder:
         except ValueError as e:
             raise struct.error(f"Failed to unpack transaction data: {e}") from e
 
-        return tx
+        return decoded_tx
 
     # --------------------------------------------------------------------------------------------
     def extract_raw_txs(self, body: str, offset: int = 0) -> list[str]:
@@ -534,7 +532,7 @@ class BlockDecoder:
 
         return tx_outputs, offset
 
-    def decode_transaction_witnesses_from_raw_tx(self, tx: str, /) -> tuple[list[TransactionWitness], int]:
+    def decode_transaction_witnesses_from_raw_tx(self, tx: str) -> tuple[list[TransactionWitness], int]:
         """
         """
         # Validate and convert input
@@ -633,7 +631,7 @@ class BlockDecoder:
         return witnesses, offset
 
     # -------------------------------------------------------------------------------------------------
-    def decode_witness_item(self, data: bytes, index: int, witness_count: int, /) -> WitnessItem:
+    def decode_witness_item(self, data: bytes, index: int, witness_count: int) -> WitnessItem:
         """
         """
         hex_data = data.hex()
