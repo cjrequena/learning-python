@@ -101,9 +101,9 @@ class BlockDecoder:
                 'body_size_bytes': len(body) // 2
             }
 
-        except Exception as e:
+        except Exception as ex:
             raise ValueError({
-                'error': f"Failed to decode full block: {str(e)}",
+                'error': f"Failed to decode full block: {str(ex)}",
                 'raw_hex_length': len(block)
             })
 
