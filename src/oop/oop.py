@@ -2,10 +2,10 @@
 # Class Example
 
 class Vehicle:
-    def __init__(self, vehName: str, numDoors: int, numWheels: int):
-        self.name = vehName
-        self.doors = numDoors
-        self.wheels = numWheels
+    def __init__(self, veh_name: str, num_doors: int, num_wheels: int):
+        self.name = veh_name
+        self.doors = num_doors
+        self.wheels = num_wheels
         self.make = "Generic Engines"
 
     def printSpecs(self):
@@ -18,10 +18,10 @@ class Vehicle:
 # This is actually how you would overload a function, by using defaults
 
 class Vehicle2:
-    def __init__(self, vehName:str, numDoors:int = 2, numWheels:int = 4, make:str = "Porschwagon") -> None:
-        self.name = vehName
-        self.doors = numDoors
-        self.wheels = numWheels
+    def __init__(self, veh_name:str, num_doors:int = 2, num_wheels:int = 4, make:str = "Porschwagon") -> None:
+        self.name = veh_name
+        self.doors = num_doors
+        self.wheels = num_wheels
         self.make = make
 
     def printSpecs(self):
@@ -31,10 +31,10 @@ class Vehicle2:
 
 # Subclass examples
 class Van(Vehicle):
-    def __init__(self, vehName:str, numDoors:int, numWheels:int, numRearDoors:int, numSideDoors:int) -> None:
-        super().__init__(vehName, numDoors, numWheels)
-        self.rearDoors = numRearDoors
-        self.sideDoors = numSideDoors
+    def __init__(self, veh_name:str, num_doors:int, num_wheels:int, num_rear_doors:int, num_side_doors:int) -> None:
+        super().__init__(veh_name, num_doors, num_wheels)
+        self.rearDoors = num_rear_doors
+        self.sideDoors = num_side_doors
 
     # Overwriting function
     def printSpecs(self):
@@ -42,10 +42,10 @@ class Van(Vehicle):
 
 
 class Lorry(Vehicle):
-    def __init__(self, vehName:str, numDoors:int, numWheels:int, trailer:bool, maxLoad:int) -> None:
-        super().__init__(vehName, numDoors, numWheels)
+    def __init__(self, veh_name:str, num_doors:int, num_wheels:int, trailer:bool, max_load:int) -> None:
+        super().__init__(veh_name, num_doors, num_wheels)
         self.trailer = trailer
-        self.load = maxLoad
+        self.load = max_load
 
     # Overwriting function
     def printSpecs(self):
