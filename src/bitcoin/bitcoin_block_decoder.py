@@ -1,7 +1,8 @@
 import json
 import struct
-import requests
 from typing import TypedDict
+
+import requests
 
 
 class BlockHeader(TypedDict):
