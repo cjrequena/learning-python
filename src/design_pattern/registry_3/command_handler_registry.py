@@ -23,7 +23,7 @@ class CommandHandlerRegistry:
             return command_handler_cls
         return decorator
 
-    def create(self, name: str) -> Optional[CommandHandler]:
+    def instantiate(self, name: str) -> Optional[CommandHandler]:
         """Instantiate a command handler by name."""
         command_handler_cls = self._command_handler_registry.get(name)
         if command_handler_cls is None:
@@ -31,11 +31,11 @@ class CommandHandlerRegistry:
         return command_handler_cls()
 
     def handle(self, name: str) -> str:
-        """Create and execute a command by name."""
-        command = self.create(name)
-        if command is None:
-            return f"No specialized handle found with: {name}"
-        return command.handle()
+        """Create and execute a command_handler by name."""
+        command_handler = self.instantiate(name)
+        if command_handler is None:
+            return f"No specialized handler found with: {name}"
+        return command_handler.handle()
 
     def all_handlers(self) -> Dict[str, Type[CommandHandler]]:
         """Return all registered command handlers."""

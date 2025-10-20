@@ -19,7 +19,7 @@ class CommandHandlerRegistry:
             raise KeyError(f"Command '{name}' is already registered.")
         self._command_handler_registry[name] = command_handler_cls
 
-    def create(self, name: str) -> Optional[CommandHandler]:
+    def instantiate(self, name: str) -> Optional[CommandHandler]:
         """Instantiate a command by name."""
         command_handler_cls = self._command_handler_registry.get(name)
         if command_handler_cls is None:
@@ -28,9 +28,9 @@ class CommandHandlerRegistry:
 
     def handle(self, name: str) -> str:
         """Create and run a command_handler by name."""
-        command_handler = self.create(name)
+        command_handler = self.instantiate(name)
         if command_handler is None:
-            return f"No specialized handle found with: {name}"
+            return f"No specialized handler found with: {name}"
         return command_handler.handle()
 
     def all_command_handlers(self) -> Dict[str, Type[CommandHandler]]:
