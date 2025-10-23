@@ -44,8 +44,8 @@ class Fraction:
         if remainder == 0:
             # It's an integer
             whole_signed = sign * whole
-            s = str(whole_signed)
-            return whole_signed, 0, 1, s
+            str_representation = str(whole_signed)
+            return whole_signed, 0, 1, str_representation
 
         # Reduce the fractional remainder
         g = gcd(remainder, denominator_absolute_value)
@@ -55,13 +55,13 @@ class Fraction:
         # Apply sign: attach to whole if whole != 0, otherwise to numerator
         if whole != 0:
             whole_signed = sign * whole
-            s = f"{whole_signed} {rn}/{rd}"
-            return whole_signed, rn, rd, s
+            str_representation = f"{whole_signed} {rn}/{rd}"
+            return whole_signed, rn, rd, str_representation
         else:
             # whole == 0, fractional result only (proper fraction)
             rn_signed = sign * rn
-            s = f"{rn_signed}/{rd}"
-            return 0, rn_signed, rd, s
+            str_representation = f"{rn_signed}/{rd}"
+            return 0, rn_signed, rd, str_representation
 
 # -----------------------------------------------------------------------------------------------------------------
 def main() -> None:
@@ -90,7 +90,7 @@ def main() -> None:
 
     # Display results
     for inp, out in results:
-        print(f"{inp[0]}/{inp[1]} -> {out[3]}    (tuple: whole={out[0]}, num={out[1]}, den={out[2]})")
+        print(f"{inp[0]}/{inp[1]} -> {out[3]}    (tuple: whole={out[0]}, num={out[1]}, den={out[2]}, str_representation={out[3]})")
 # -----------------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":
     main()
